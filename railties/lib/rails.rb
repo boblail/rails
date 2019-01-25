@@ -110,5 +110,9 @@ module Rails
     def public_path
       application && Pathname.new(application.paths["public"].first)
     end
+
+    def autoloader
+      @autoloader ||= Zeitwerk::Loader.new
+    end
   end
 end

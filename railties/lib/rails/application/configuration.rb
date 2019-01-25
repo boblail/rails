@@ -18,7 +18,8 @@ module Rails
                     :session_options, :time_zone, :reload_classes_only_on_change,
                     :beginning_of_week, :filter_redirect, :x, :enable_dependency_loading,
                     :read_encrypted_secrets, :log_level, :content_security_policy_report_only,
-                    :content_security_policy_nonce_generator, :require_master_key, :credentials
+                    :content_security_policy_nonce_generator, :require_master_key, :credentials,
+                    :autoloader
 
       attr_reader :encoding, :api_only, :loaded_config_version
 
@@ -64,6 +65,7 @@ module Rails
         @credentials                             = ActiveSupport::OrderedOptions.new
         @credentials.content_path                = default_credentials_content_path
         @credentials.key_path                    = default_credentials_key_path
+        @autoloader                              = :zeitwerk
       end
 
       def load_defaults(target_version)
