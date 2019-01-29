@@ -55,6 +55,72 @@ module ActiveRecord
         end
       end
 
+      # Inserts a record (or multiple records) into the database. This method constructs a single SQL INSERT
+      # statement and sends it straight to the database. It does not instantiate the involved models and it does not
+      # trigger Active Record callbacks or validations. However, values passed to #insert_many will still go through
+      # Active Record's normal type casting and serialization.
+      #
+      # The +attributes+ parameter can be either a Hash or an Array of Hashes. These Hashes describe the
+      # attributes on the objects that are to be created.
+      #
+      # ==== Options
+      #
+      # [:returning]
+      #   (Postgres-only) An array of column names that should be returned for all successfully inserted rows.
+      #   By default, the primary key(s) will be returned for every inserted rows. Can be set to `false` to return nothing.
+      #
+      # [:on_conflict]
+      #   A hash that describes how the database should respond to duplicate rows:
+      #
+      #     { do: :nothing } — skip duplicate rows
+      #
+      #     { do: :update } — update duplicate rows (perform an UPSERT)
+      #
+      #   For databases that support it, the hash can also specify which of several unique indexes to handle conficts for:
+      #
+      #     { column: %w{ isbn }, do: :update }
+      #
+      #   For databases that support partial indexes, the hash can also identify the unique index with its conditional
+      #
+      #     { column: %w{ isbn }, where: "published_on IS NOT NULL", do: :update }
+      #
+      # ==== Examples
+      #
+      #   # Insert a single record
+      #   Book.insert_many title: 'Agile Web Development with Rails', author: 'David'
+      #
+      #   # Insert multiple records
+      #   Book.insert_many [
+      #     { title: 'Agile Web Development with Rails', author: 'David' },
+      #     { title: 'Eloquent Ruby', author: '' }
+      #   ]
+      #
+      def insert_many(attributes, options = {})
+        attributes = [ attributes ] unless attributes.is_a?(Array)
+
+        primary_keys = Array.wrap(primary_key)
+
+        options[:returning] = options.fetch(:returning) { connection.supports_insert_returning? ? primary_keys : false }
+
+        if on_conflict = options[:on_conflict]
+          on_conflict[:column] = Array.wrap(on_conflict.fetch(:column, primary_keys))
+
+          on_conflict_do = on_conflict[:do]
+          raise ArgumentError, "#{on_conflict_do.inspect} is an unknown value for conflict[:do]; must be :nothing or :update" unless [:nothing, :update].member?(on_conflict_do)
+
+          if on_conflict_do == :update && attributes.any?
+            on_conflict[:update] = attributes.first.keys.map(&:to_s) - on_conflict[:column].map(&:to_s) - primary_keys - readonly_attributes.to_a
+
+            if on_conflict[:update].empty?
+              on_conflict[:do] = :nothing
+            end
+          end
+        end
+
+        connection.insert_many(attributes, table_name, options)
+      end
+
+
       # Given an attributes hash, +instantiate+ returns a new instance of
       # the appropriate class. Accepts only keys as strings.
       #

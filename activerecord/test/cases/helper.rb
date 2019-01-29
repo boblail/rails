@@ -61,6 +61,18 @@ def supports_savepoints?
   ActiveRecord::Base.connection.supports_savepoints?
 end
 
+def supports_partial_index?
+  ActiveRecord::Base.connection.supports_partial_index?
+end
+
+def supports_insert_returning?
+  ActiveRecord::Base.connection.supports_insert_returning?
+end
+
+def supports_insert_on_conflict?
+  ActiveRecord::Base.connection.supports_insert_on_conflict?
+end
+
 def with_env_tz(new_tz = "US/Eastern")
   old_tz, ENV["TZ"] = ENV["TZ"], new_tz
   yield

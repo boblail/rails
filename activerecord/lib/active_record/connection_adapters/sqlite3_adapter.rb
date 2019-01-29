@@ -137,6 +137,10 @@ module ActiveRecord
         true
       end
 
+      def supports_insert_on_conflict?
+        sqlite_version >= "3.24.0"
+      end
+
       def active?
         @active
       end

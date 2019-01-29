@@ -1,3 +1,13 @@
+*   Add `insert_many` method to `ActiveRecord::Persistence`, allowing bulk
+    inserts akin to the bulk updates provided by `update_all` and bulk deletes
+    by `delete_all`.
+
+    Supports skipping or upserting duplicates through the `ON CONFLICT` syntax
+    for Postgres (9.5+) and Sqlite (3.24+) and `INSERT IGNORE`/
+    `ON DUPLICATE KEY UPDATE` syntax for MySQL.
+
+    *Bob Lail*
+
 *   Make `t.timestamps` with precision by default.
 
     *Ryuta Kamizono*

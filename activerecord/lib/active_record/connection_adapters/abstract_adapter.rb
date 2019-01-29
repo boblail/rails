@@ -389,6 +389,14 @@ module ActiveRecord
         false
       end
 
+      def supports_insert_returning?
+        false
+      end
+
+      def supports_insert_on_conflict?
+        false
+      end
+
       # This is meant to be implemented by the adapters that support extensions
       def disable_extension(name)
       end

@@ -327,6 +327,80 @@ module ActiveRecord
         # Do nothing by default. Implement for PostgreSQL, Oracle, ...
       end
 
+      def insert_many(inserts, table_name, options={})
+        returning = options.fetch(:returning)
+
+        if returning && !supports_insert_returning?
+          raise ArgumentError, "#{name} does not support :returning"
+        end
+
+        if inserts.empty?
+          return returning ? ActiveRecord::Result.new([], []) : 0
+        end
+
+        on_conflict = options[:on_conflict]
+        if on_conflict
+          unless supports_insert_on_conflict?
+            raise ArgumentError, "#{name} does not support :on_conflict"
+          end
+
+          if on_conflict[:column].empty?
+            raise ArgumentError, "To use the :on_conflict option, you must specify :column"
+          end
+        end
+
+        columns = schema_cache.columns_hash(table_name)
+        keys = inserts.first.keys.map(&:to_s)
+        values_list = inserts.map do |attributes|
+          attributes = attributes.stringify_keys
+
+          unless attributes.keys.to_set == keys.to_set
+            raise "All objects being inserted need to have the same attributes"
+          end
+
+          keys.map do |name|
+            column = columns[name]
+            type = lookup_cast_type_from_column(column)
+            bind = Relation::QueryAttribute.new(name, attributes[name], type)
+            with_yaml_fallback(bind.value_for_database)
+          end
+        end
+
+        sql = insert_many_sql(table_name, keys, values_list, returning: returning, on_conflict: on_conflict)
+
+        if returning
+          exec_query sql, "Bulk Insert"
+        else
+          execute sql, "Bulk Insert"
+        end
+      end
+
+      def insert_many_sql(table_name, keys, values_list, returning:, on_conflict:)
+        table = Arel::Table.new(table_name)
+        manager = Arel::InsertManager.new
+        manager.into(table)
+        keys.each { |column| manager.columns << table[column] }
+        manager.values = manager.create_values_list(values_list)
+
+        sql = [ manager.to_sql ]
+
+        if on_conflict
+          sql << " ON CONFLICT(#{on_conflict.fetch(:column).map(&method(:quote_column_name)).join(",")})"
+          sql << " WHERE #{on_conflict[:where]}" if on_conflict[:where]
+
+          case on_conflict.fetch(:do)
+          when :nothing
+            sql << " DO NOTHING"
+          when :update
+            sql << " DO UPDATE SET #{on_conflict.fetch(:update).map { |key| "#{quote_column_name(key)} = excluded.#{quote_column_name(key)}" }.join(", ")}"
+          end
+        end
+
+        sql << " RETURNING #{returning.map(&method(:quote_column_name)).join(",")}" if returning
+
+        sql.join
+      end
+
       # Inserts the given fixture into the table. Overridden in adapters that require
       # something beyond a simple insert (eg. Oracle).
       # Most of adapters should implement `insert_fixtures_set` that leverages bulk SQL insert.

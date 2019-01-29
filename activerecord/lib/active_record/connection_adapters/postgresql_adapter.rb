@@ -196,6 +196,14 @@ module ActiveRecord
         true
       end
 
+      def supports_insert_returning?
+        true
+      end
+
+      def supports_insert_on_conflict?
+        postgresql_version >= 90500
+      end
+
       def index_algorithms
         { concurrently: "CONCURRENTLY" }
       end

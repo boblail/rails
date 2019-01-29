@@ -19,6 +19,29 @@ module ActiveRecord
           execute(sql, name).to_a
         end
 
+        def insert_many_sql(table_name, keys, values_list, returning:, on_conflict:)
+          sql = [
+            "INSERT ",
+           ("IGNORE " if on_conflict&.fetch(:do) == :nothing),
+            "INTO ",
+            quote_table_name(table_name),
+            " (#{keys.map(&method(:quote_column_name)).join(', ')}) ",
+            Arel::InsertManager.new.create_values_list(values_list).to_sql
+          ]
+
+          if on_conflict
+            if on_conflict[:where]
+              raise ArgumentError, "#{name} does not support on_conflict[:where]"
+            end
+
+            if on_conflict.fetch(:do) == :update
+              sql << " ON DUPLICATE KEY UPDATE #{on_conflict.fetch(:update).map { |key| "#{quote_column_name(key)} = VALUES(#{quote_column_name(key)})" }.join(", ")}"
+            end
+          end
+
+          sql.join
+        end
+
         READ_QUERY = ActiveRecord::ConnectionAdapters::AbstractAdapter.build_read_query_regexp(:begin, :commit, :explain, :select, :set, :show, :release, :savepoint, :rollback) # :nodoc:
         private_constant :READ_QUERY
 

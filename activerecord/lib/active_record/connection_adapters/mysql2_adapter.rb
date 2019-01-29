@@ -62,6 +62,10 @@ module ActiveRecord
         true
       end
 
+      def supports_insert_on_conflict?
+        true
+      end
+
       # HELPER METHODS ===========================================
 
       def each_hash(result) # :nodoc:

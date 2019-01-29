@@ -2,6 +2,7 @@
 
 require "cases/helper"
 require "models/aircraft"
+require "models/book"
 require "models/post"
 require "models/comment"
 require "models/author"
@@ -20,8 +21,68 @@ require "models/ship"
 require "models/admin"
 require "models/admin/user"
 
+class ReadonlyNameBook < Book
+  attr_readonly :name
+end
+
 class PersistenceTest < ActiveRecord::TestCase
-  fixtures :topics, :companies, :developers, :accounts, :minimalistics, :authors, :author_addresses, :posts, :minivans
+  fixtures :topics, :companies, :developers, :accounts, :minimalistics, :authors, :author_addresses, :posts, :minivans, :books
+
+  def test_insert_many
+    assert_difference "Book.count", +1 do
+      Book.insert_many [{ name: "Rework", author_id: 1 }]
+    end
+  end
+
+  def test_insert_many_returns_primary_key
+    skip unless supports_insert_returning?
+    result = Book.insert_many [{ name: "Rework", author_id: 1 }]
+    assert_kind_of ActiveRecord::Result, result
+    assert_equal %w{id}, result.columns
+  end
+
+  def test_insert_many_returns_requested_fields
+    skip unless supports_insert_returning?
+    result = Book.insert_many [{ name: "Rework", author_id: 1 }], returning: [:id, :name]
+    assert_equal %w{Rework}, result.pluck("name")
+  end
+
+  def test_insert_many_skips_duplicate_records_when_on_conflict_is_nothing
+    skip unless supports_insert_on_conflict?
+    assert_no_difference "Book.count" do
+      Book.insert_many [{ id: 1, name: "Agile Web Development with Rails" }], on_conflict: { do: :nothing }
+    end
+  end
+
+  def test_insert_many_updates_existing_records_when_on_conflict_is_update
+    skip unless supports_insert_on_conflict?
+    new_name = "Agile Web Development with Rails, 4th Edition"
+    Book.insert_many [{ id: 1, name: new_name }], on_conflict: { do: :update }
+    assert_equal new_name, Book.find(1).name
+  end
+
+  def test_insert_many_does_not_update_readonly_attributes_during_upsert
+    skip unless supports_insert_on_conflict?
+    new_name = "Agile Web Development with Rails, 4th Edition"
+    ReadonlyNameBook.insert_many [{ id: 1, name: new_name }], on_conflict: { do: :update }
+    refute_equal new_name, Book.find(1).name
+  end
+
+  def test_insert_many_does_not_update_primary_keys_during_upsert
+    skip unless supports_insert_on_conflict?
+    Book.insert_many [{id: 101, name: "Perelandra", author_id: 7 }]
+    Book.insert_many [{id: 103, name: "Perelandra", author_id: 7, isbn: "1974522598" }], on_conflict: { column: %i{author_id name}, do: :update }
+    book = Book.find_by(name: "Perelandra")
+    assert_equal 101, book.id, "Should not have updated the ID"
+    assert_equal "1974522598", book.isbn, "Should have updated the isbn"
+  end
+
+  def test_insert_many_does_not_perform_an_upsert_if_a_partial_index_doesnt_apply
+    skip unless supports_insert_on_conflict? && supports_partial_index?
+    Book.insert_many [{name: "Out of the Silent Planet", author_id: 7, isbn: "1974522598", published_on: Date.new(1938, 4, 1) }]
+    Book.insert_many [{name: "Perelandra", author_id: 7, isbn: "1974522598" }], on_conflict: { column: :isbn, where: "published_on IS NOT NULL", do: :update }
+    assert_equal ["Out of the Silent Planet", "Perelandra"], Book.where(isbn: "1974522598").order(:name).pluck(:name)
+  end
 
   def test_update_many
     topic_data = { 1 => { "content" => "1 updated" }, 2 => { "content" => "2 updated" } }
